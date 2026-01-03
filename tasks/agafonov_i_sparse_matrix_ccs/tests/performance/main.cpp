@@ -33,18 +33,19 @@ static SparseMatrixCCS CreatePerfMatrix(int m, int n, double density) {
 
 class SparseMatrixPerfTests : public ppc::util::BaseRunPerfTests<InType, OutType> {
  protected:
+  const int k_size = 4000;
   void SetUp() override {
-    const int m = 1500;
-    const int k = 1500;
-    const int n = 1500;
-    const double density = 0.02;
+    const int m = k_size;
+    const int k = k_size;
+    const int n = k_size;
+    const double density = 0.01;
 
     input_data_.A = CreatePerfMatrix(m, k, density);
     input_data_.B = CreatePerfMatrix(k, n, density);
   }
 
   bool CheckTestOutputData(OutType &output_data) final {
-    return output_data.m == 1500 && output_data.n == 1500;
+    return output_data.m == k_size && output_data.n == k_size;
   }
 
   InType GetTestInputData() final {
