@@ -1,55 +1,81 @@
-# <Task Full Name>
+# Умножение разреженных матриц. Элементы типа double. Формат хранения матрицы – столбцовый (CCS).
 
-- Student: <Last First Middle>, group <Group>
-- Technology: <SEQ | MPI | OMP | TBB | STL | ALL>
-- Variant: <N>
+- Student: Агафонов Илья Дмитриевич, group 3823Б1ФИ1
+- Technology: SEQ | MPI
+- Variant: 5
 
 ## 1. Introduction
-Brief motivation, problem context, expected outcome.
+Задача умножения разреженных матриц является критически важной в научных вычислениях и машинном обучении. Использование формата **CCS (Compressed Column Storage)** позволяет эффективно работать с матрицами, где большинство элементов равны нулю, экономя память и время процессора за счет обработки только ненулевых значений.
 
 ## 2. Problem Statement
-Formal task definition, input/output format, constraints.
+Необходимо реализовать умножение двух разреженных матриц $A$ и $B$ в формате CCS для получения результирующей матрицы $C = A \times B$.
+
+**Входные данные:**
+- Матрицы $A (m \times k)$ и $B (k \times n)$ в формате CCS.
+- Формат включает три вектора: `values` (ненулевые значения), `row_indices` (индексы строк), `col_ptr` (индексы начала столбцов).
+
+**Выходные данные:**
+- Результирующая матрица $C (m \times n)$ в формате CCS.
+
+**Ограничения:**
+- Тип данных — `double`.
+- Число столбцов $A$ равно числу строк $B$ ($A.n == B.m$).
 
 ## 3. Baseline Algorithm (Sequential)
-Describe the base algorithm with enough detail to reproduce.
+Последовательный алгоритм использует "столбцовую" логику:
+1. Матрица $A$ предварительно транспонируется ($A^T$) для обеспечения быстрого доступа к строкам исходной матрицы.
+2. Для каждого столбца $j$ матрицы $B$:
+   - Инициализируется плотный вектор-аккумулятор размера $m$.
+   - Проход по ненулевым элементам $B_{kj}$.
+   - Для каждого $B_{kj}$ выбирается соответствующий столбец $k$ из $A^T$ (бывшая строка $A$) и выполняется обновление аккумулятора: $C_{ij} += A_{ik} \times B_{kj}$.
+   - Ненулевые значения из аккумулятора упаковываются обратно в формат CCS.
 
 ## 4. Parallelization Scheme
-- For MPI: data distribution, communication pattern/topology, rank roles.
-- For threads: decomposition, scheduling, synchronization.
-Diagrams or short pseudocode are welcome.
+Для распараллеливания используется распределение столбцов выходной матрицы между MPI-процессами:
+
+- **Data Distribution**: 
+    - Процесс 0 транспонирует матрицу $A$ и рассылает её всем узлам через `MPI_Bcast`.
+    - Столбцы матрицы $B$ распределяются между процессами (декомпозиция по столбцам).
+- **Rank Roles**:
+    - **Rank 0**: Подготовка данных, распределение блоков матрицы $B$, вычисление своей части и сборка финальной матрицы $C$ через `GatherResults`.
+    - **Workers**: Получение своей порции столбцов $B$, вычисление локальных столбцов $C$ и отправка их мастеру.
+- **Communication Pattern**:
+    - Групповые рассылки (`MPI_Bcast`) для передачи матрицы $A$.
+    - Точечные обмены (`MPI_Send`/`MPI_Recv`) для распределения работы и сбора результатов.
 
 ## 5. Implementation Details
-- Code structure (files, key classes/functions)
-- Important assumptions and corner cases
-- Memory usage considerations
-
+- **Код разбит на функциональные блоки**:
+    - `SparseMatrixCCS`: Основная структура данных.
+    - `BroadcastSparseMatrix`: Кастомная функция для передачи разреженной структуры через MPI.
+    - `GatherResults`: Логика объединения локальных CCS-структур в одну глобальную с пересчетом индексов.
 ## 6. Experimental Setup
-- Hardware/OS: CPU model, cores/threads, RAM, OS version
-- Toolchain: compiler, version, build type (Release/RelWithDebInfo)
-- Environment: PPC_NUM_THREADS / PPC_NUM_PROC, other relevant vars
-- Data: how test data is generated or sourced (relative paths)
+**Hardware/OS:**
+  - **Процессор:** Процессор	AMD Ryzen 5 5500U, ядер: 6, логических процессоров: 12
+  - **Оперативная память:** 16 ГБ DDR4
+  - **Операционная система:** Windows 10 Pro 22H2
+- **Toolchain:**
+  - **Компилятор:** g++ 13.3.0
+  - **Тип сборки:** Release (-O3 )
+  - **MPI:** Open MPI 4.1.6
 
 ## 7. Results and Discussion
 
 ### 7.1 Correctness
-Briefly explain how correctness was verified (reference results, invariants, unit tests).
+Корректность подтверждена успешным прохождением тестов `agafonov_i_sparse_matrix_ccs_func`, где результаты параллельной версии сравнивались с последовательным эталоном. Все тесты `PASSED`.
 
 ### 7.2 Performance
-Present time, speedup and efficiency. Example table:
+На основе замеров в режиме `Release` на 4 процессах:
 
 | Mode        | Count | Time, s | Speedup | Efficiency |
 |-------------|-------|---------|---------|------------|
-| seq         | 1     | 1.234   | 1.00    | N/A        |
-| omp         | 2     | 0.700   | 1.76    | 88.0%      |
-| omp         | 4     | 0.390   | 3.16    | 79.0%      |
+| seq         | 1     | 0.0195  | 1.00    | 100        |
+| mpi         | 4     | 0.0431  | 0.45*   | 11.2%      |
 
-Optionally add plots (use relative paths), and discuss bottlenecks and scalability limits.
+*\* Примечание: На матрицах данного размера (1500x1500) время пересылки данных (коммуникационная составляющая) превышает время вычислений. Для получения реального ускорения (> 1.0) требуются матрицы размерностью от 3000x3000 и выше.*
 
 ## 8. Conclusions
-Summarize findings and limitations.
+Алгоритм успешно реализован и проходит все тесты на корректность. Реализация MPI-версии показала работоспособность механизмов распределения и сборки разреженных данных. Для повышения эффективности на малых данных рекомендуется использовать гибридный подход (MPI+OpenMP) или увеличивать вычислительную нагрузку на каждый процесс.
 
 ## 9. References
-1. <Article/Book/Doc URL>
-2. <Another source>
-
-## Appendix (Optional)
+1. Материлы и документация по курсу
+2. MPI Standard Specification: [https://www.mpi-forum.org/].
