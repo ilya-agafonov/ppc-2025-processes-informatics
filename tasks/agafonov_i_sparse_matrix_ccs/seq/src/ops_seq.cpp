@@ -1,8 +1,10 @@
 #include "agafonov_i_sparse_matrix_ccs/seq/include/ops_seq.hpp"
 
-#include <algorithm>
 #include <cmath>
+#include <cstddef>
 #include <vector>
+
+#include "agafonov_i_sparse_matrix_ccs/common/include/common.hpp"
 
 namespace agafonov_i_sparse_matrix_ccs {
 
@@ -19,66 +21,70 @@ bool SparseMatrixCCSSeq::PreProcessingImpl() {
   return true;
 }
 
-SparseMatrixCCS SparseMatrixCCSSeq::Transpose(const SparseMatrixCCS &A) {
-  int target_cols = A.m;
-  int target_rows = A.n;
-  SparseMatrixCCS AT(target_rows, target_cols);
+SparseMatrixCCS SparseMatrixCCSSeq::Transpose(const SparseMatrixCCS &matrix) {
+  int target_cols = matrix.m;
+  int target_rows = matrix.n;
+  SparseMatrixCCS at(target_rows, target_cols);
 
-  AT.col_ptr.assign(target_cols + 1, 0);
-  for (int i = 0; i < (int)A.row_indices.size(); ++i) {
-    AT.col_ptr[A.row_indices[i] + 1]++;
+  at.col_ptr.assign(static_cast<std::size_t>(target_cols) + 1, 0);
+  for (int row_indice : matrix.row_indices) {
+    at.col_ptr[static_cast<std::size_t>(row_indice) + 1]++;
   }
 
   for (int i = 0; i < target_cols; ++i) {
-    AT.col_ptr[i + 1] += AT.col_ptr[i];
+    at.col_ptr[static_cast<std::size_t>(i) + 1] += at.col_ptr[static_cast<std::size_t>(i)];
   }
 
-  AT.row_indices.resize(A.values.size());
-  AT.values.resize(A.values.size());
-  std::vector<int> current_pos = AT.col_ptr;
+  at.row_indices.resize(matrix.values.size());
+  at.values.resize(matrix.values.size());
+  std::vector<int> current_pos = at.col_ptr;
 
-  for (int col = 0; col < A.n; ++col) {
-    for (int j = A.col_ptr[col]; j < A.col_ptr[col + 1]; ++j) {
-      int row = A.row_indices[j];
-      int dest_pos = current_pos[row]++;
-      AT.row_indices[dest_pos] = col;
-      AT.values[dest_pos] = A.values[j];
+  for (int col = 0; col < matrix.n; ++col) {
+    for (int j = matrix.col_ptr[static_cast<std::size_t>(col)]; j < matrix.col_ptr[static_cast<std::size_t>(col) + 1];
+         ++j) {
+      int row = matrix.row_indices[static_cast<std::size_t>(j)];
+      int dest_pos = current_pos[static_cast<std::size_t>(row)]++;
+      at.row_indices[static_cast<std::size_t>(dest_pos)] = col;
+      at.values[static_cast<std::size_t>(dest_pos)] = matrix.values[static_cast<std::size_t>(j)];
     }
   }
-  return AT;
+  return at;
 }
 
 bool SparseMatrixCCSSeq::RunImpl() {
-  auto &A = GetInput().A;
-  auto &B = GetInput().B;
-  SparseMatrixCCS AT = Transpose(A);
+  auto &a = GetInput().A;
+  auto &b = GetInput().B;
+  SparseMatrixCCS at = Transpose(a);
 
-  auto &C = GetOutput();
-  C.m = A.m;
-  C.n = B.n;
-  C.col_ptr.assign(C.n + 1, 0);
-  C.values.clear();
-  C.row_indices.clear();
+  auto &c = GetOutput();
+  c.m = a.m;
+  c.n = b.n;
+  c.col_ptr.assign(static_cast<std::size_t>(c.n) + 1, 0);
+  c.values.clear();
+  c.row_indices.clear();
 
-  std::vector<double> dense_col(A.m, 0.0);
-  for (int col_B = 0; col_B < B.n; ++col_B) {
-    for (int k_ptr = B.col_ptr[col_B]; k_ptr < B.col_ptr[col_B + 1]; ++k_ptr) {
-      int k = B.row_indices[k_ptr];
-      double val_B = B.values[k_ptr];
-      if (k < (int)AT.col_ptr.size() - 1) {
-        for (int i_ptr = AT.col_ptr[k]; i_ptr < AT.col_ptr[k + 1]; ++i_ptr) {
-          dense_col[AT.row_indices[i_ptr]] += AT.values[i_ptr] * val_B;
+  std::vector<double> dense_col(static_cast<std::size_t>(a.m), 0.0);
+  for (int col_b = 0; col_b < b.n; ++col_b) {
+    for (int k_ptr = b.col_ptr[static_cast<std::size_t>(col_b)]; k_ptr < b.col_ptr[static_cast<std::size_t>(col_b) + 1];
+         ++k_ptr) {
+      int k = b.row_indices[static_cast<std::size_t>(k_ptr)];
+      double val_b = b.values[static_cast<std::size_t>(k_ptr)];
+      if (k < static_cast<int>(at.col_ptr.size()) - 1) {
+        for (int i_ptr = at.col_ptr[static_cast<std::size_t>(k)]; i_ptr < at.col_ptr[static_cast<std::size_t>(k) + 1];
+             ++i_ptr) {
+          dense_col[static_cast<std::size_t>(at.row_indices[static_cast<std::size_t>(i_ptr)])] +=
+              at.values[static_cast<std::size_t>(i_ptr)] * val_b;
         }
       }
     }
-    for (int i = 0; i < A.m; ++i) {
-      if (std::abs(dense_col[i]) > 1e-15) {
-        C.values.push_back(dense_col[i]);
-        C.row_indices.push_back(i);
-        dense_col[i] = 0.0;
+    for (int i = 0; i < a.m; ++i) {
+      if (std::abs(dense_col[static_cast<std::size_t>(i)]) > 1e-15) {
+        c.values.push_back(dense_col[static_cast<std::size_t>(i)]);
+        c.row_indices.push_back(i);
+        dense_col[static_cast<std::size_t>(i)] = 0.0;
       }
     }
-    C.col_ptr[col_B + 1] = (int)C.values.size();
+    c.col_ptr[static_cast<std::size_t>(col_b) + 1] = static_cast<int>(c.values.size());
   }
   return true;
 }
@@ -86,4 +92,5 @@ bool SparseMatrixCCSSeq::RunImpl() {
 bool SparseMatrixCCSSeq::PostProcessingImpl() {
   return true;
 }
+
 }  // namespace agafonov_i_sparse_matrix_ccs

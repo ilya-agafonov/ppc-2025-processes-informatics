@@ -1,23 +1,27 @@
 #include <gtest/gtest.h>
+#include <mpi.h>
 
+#include <array>
 #include <cmath>
+#include <cstddef>
 #include <random>
 #include <string>
 #include <tuple>
-#include <vector>
 
 #include "agafonov_i_sparse_matrix_ccs/common/include/common.hpp"
 #include "agafonov_i_sparse_matrix_ccs/mpi/include/ops_mpi.hpp"
 #include "agafonov_i_sparse_matrix_ccs/seq/include/ops_seq.hpp"
 #include "util/include/func_test_util.hpp"
+#include "util/include/util.hpp"
 
 namespace agafonov_i_sparse_matrix_ccs {
 
-typedef std::tuple<int, int, int, double, std::string> TestParams;
+using TestParams = std::tuple<int, int, int, double, std::string>;
 
 static SparseMatrixCCS CreateRandomSparseMatrix(int m, int n, double density) {
   SparseMatrixCCS matrix(m, n);
-  std::mt19937 gen(42);
+  std::random_device rd;
+  std::mt19937 gen(rd());
   std::uniform_real_distribution<> dis(0.0, 1.0);
   std::uniform_real_distribution<> val_dis(-100.0, 100.0);
 
@@ -28,7 +32,7 @@ static SparseMatrixCCS CreateRandomSparseMatrix(int m, int n, double density) {
         matrix.row_indices.push_back(i);
       }
     }
-    matrix.col_ptr[j + 1] = static_cast<int>(matrix.values.size());
+    matrix.col_ptr[static_cast<std::size_t>(j) + 1] = static_cast<int>(matrix.values.size());
   }
   return matrix;
 }
@@ -62,7 +66,7 @@ class SparseMatrixFuncTests : public ppc::util::BaseRunFuncTests<InType, OutType
   }
 
   bool CheckTestOutputData(OutType &output_data) final {
-    int rank;
+    int rank = 0;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     if (rank != 0) {
       return true;
@@ -78,7 +82,7 @@ class SparseMatrixFuncTests : public ppc::util::BaseRunFuncTests<InType, OutType
       return false;
     }
 
-    for (size_t i = 0; i < output_data.values.size(); ++i) {
+    for (std::size_t i = 0; i < output_data.values.size(); ++i) {
       if (std::abs(output_data.values[i] - expected_output_.values[i]) > 1e-6) {
         return false;
       }

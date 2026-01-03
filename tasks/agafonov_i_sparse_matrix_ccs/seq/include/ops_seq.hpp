@@ -1,6 +1,7 @@
 #pragma once
 
 #include "agafonov_i_sparse_matrix_ccs/common/include/common.hpp"
+#include "task/include/task.hpp"
 
 namespace agafonov_i_sparse_matrix_ccs {
 
@@ -10,7 +11,7 @@ class SparseMatrixCCSSeq : public BaseTask {
     return ppc::task::TypeOfTask::kSEQ;
   }
   explicit SparseMatrixCCSSeq(const InType &in);
-  static SparseMatrixCCS Transpose(const SparseMatrixCCS &A);
+  static SparseMatrixCCS Transpose(const SparseMatrixCCS &matrix);
 
  private:
   bool ValidationImpl() override;

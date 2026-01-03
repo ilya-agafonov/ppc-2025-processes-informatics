@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
-#include <memory>
+#include <cmath>
+#include <cstddef>
 #include <random>
 #include <string>
 #include <vector>
@@ -14,7 +15,8 @@ namespace agafonov_i_sparse_matrix_ccs {
 
 static SparseMatrixCCS CreatePerfMatrix(int m, int n, double density) {
   SparseMatrixCCS matrix(m, n);
-  std::mt19937 gen(42);
+  std::random_device rd;
+  std::mt19937 gen(rd());
   std::uniform_real_distribution<> dis(0.0, 1.0);
   std::uniform_real_distribution<> val_dis(-100.0, 100.0);
   for (int j = 0; j < n; ++j) {
@@ -24,7 +26,7 @@ static SparseMatrixCCS CreatePerfMatrix(int m, int n, double density) {
         matrix.row_indices.push_back(i);
       }
     }
-    matrix.col_ptr[j + 1] = static_cast<int>(matrix.values.size());
+    matrix.col_ptr[static_cast<std::size_t>(j) + 1] = static_cast<int>(matrix.values.size());
   }
   return matrix;
 }
@@ -32,18 +34,16 @@ static SparseMatrixCCS CreatePerfMatrix(int m, int n, double density) {
 class SparseMatrixPerfTests : public ppc::util::BaseRunPerfTests<InType, OutType> {
  protected:
   void SetUp() override {
-    // Увеличиваем размерность для получения ненулевого времени
-    int m = 1500;
-    int k = 1500;
-    int n = 1500;
-    double density = 0.02;  // 2% заполнения
+    const int m = 1500;
+    const int k = 1500;
+    const int n = 1500;
+    const double density = 0.02;
 
     input_data_.A = CreatePerfMatrix(m, k, density);
     input_data_.B = CreatePerfMatrix(k, n, density);
   }
 
   bool CheckTestOutputData(OutType &output_data) final {
-    // Размеры должны соответствовать m x n результату умножения (m_A x n_B)
     return output_data.m == 1500 && output_data.n == 1500;
   }
 
@@ -56,7 +56,7 @@ class SparseMatrixPerfTests : public ppc::util::BaseRunPerfTests<InType, OutType
 };
 
 TEST_P(SparseMatrixPerfTests, RunPerfModes) {
-  auto params = GetParam();
+  const auto &params = GetParam();
   ExecuteTest(params);
 }
 
@@ -65,7 +65,7 @@ const auto kAllPerfTasks = ppc::util::MakeAllPerfTasks<InType, SparseMatrixCCSRe
 
 INSTANTIATE_TEST_SUITE_P(RunModeTests, SparseMatrixPerfTests, ppc::util::TupleToGTestValues(kAllPerfTasks),
                          [](const testing::TestParamInfo<SparseMatrixPerfTests::ParamType> &info) {
-                           std::string name = std::get<1>(info.param);
+                           const std::string &name = std::get<1>(info.param);
                            return name + "_" + std::to_string(info.index);
                          });
 
